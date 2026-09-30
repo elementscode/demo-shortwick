@@ -1,0 +1,31 @@
+.auth {
+  min-height: 100dvh;
+  padding: var(--space-10) var(--space-5);
+  background: var(--bg-soft);
+}
+
+.auth-column {
+  width: 100%;
+  max-width: 26rem;
+}
+
+.auth-head {
+  align-items: center;
+  text-align: center;
+}
+
+.auth-head h1 {
+  margin: 0;
+  font-size: var(--text-2xl);
+}
+
+.auth-head p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.auth-alt {
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}

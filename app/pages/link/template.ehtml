@@ -1,0 +1,407 @@
+import "./style.css";
+import { LiveView, ValidationError, raw, redirect } from "@elements/app";
+import type { Listener } from "@elements/app";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+import { AppShell } from "#app/shared/templates/app-shell";
+import { ClickEvent, Link, linkStatus, normalizeUrl, parseTags } from "#app/shared/services/links";
+import {
+  Dimension,
+  Fact,
+  RANGES,
+  Range,
+  Share,
+  addClick,
+  countryName,
+  deviceName,
+  flag,
+  niceMax,
+  referrerName,
+  series,
+  top,
+} from "#app/shared/services/analytics";
+import { dateInputValue, displayUrl, endOfDay, formatCount, shortDate, timeAgo } from "#app/shared/services/format";
+
+interface EditForm {
+  open: boolean;
+  title: string;
+  url: string;
+  tags: string;
+  expires: string;
+  error: string;
+}
+
+interface Clock {
+  now: number;
+}
+
+interface CopyState {
+  copied: boolean;
+}
+
+function closedEdit(): EditForm {
+  return { open: false, title: "", url: "", tags: "", expires: "", error: "" };
+}
+
+function startEdit(link: Link): EditForm {
+  return {
+    open: true,
+    title: link.title,
+    url: link.url,
+    tags: link.tags.join(", "),
+    expires: dateInputValue(link.expiresAt),
+    error: "",
+  };
+}
+
+function onSave(links: LiveView<Link>, link: Link, edit: EditForm) {
+  let url = normalizeUrl(edit.url);
+
+  if (!url) {
+    edit.error = "Enter a web address, like example.com/page";
+    return;
+  }
+
+  try {
+    links.update(
+      {
+        ...link,
+        title: edit.title.trim() || link.title,
+        url,
+        tags: parseTags(edit.tags),
+        expiresAt: endOfDay(edit.expires),
+      },
+      () => edit.open = false,
+    );
+  } catch (err: any) {
+    edit.open = true;
+    edit.error = err instanceof ValidationError ? "Check the destination address" : err.message;
+  }
+}
+
+function onToggle(links: LiveView<Link>, link: Link) {
+  links.update({ ...link, enabled: !link.enabled });
+}
+
+function onDelete(links: LiveView<Link>, link: Link) {
+  if (!confirm(`Delete ${link.slug} and its ${link.clicks} clicks? The short link will stop working.`)) {
+    return;
+  }
+
+  links.delete(link);
+  redirect("/");
+}
+
+async function copyText(text: string, state: CopyState) {
+  await navigator.clipboard.writeText(text);
+  state.copied = true;
+  setTimeout(() => state.copied = false, 1600);
+}
+
+// Clicks already on screen when the page loaded; anything else is new and
+// gets the arrival highlight.
+const shownAtLoad = new Set<string>();
+
+function onAttach(clicks: Listener<ClickEvent>, facts: Fact[], recent: ClickEvent[], clock: Clock) {
+  recent.forEach((c) => shownAtLoad.add(c.id));
+
+  clicks.on("notify", (click) => {
+    addClick(facts, click);
+    recent.unshift(click);
+    recent.splice(12);
+    clock.now = Date.now();
+  });
+
+  setInterval(() => clock.now = Date.now(), 30000);
+}
+
+function rangeTotal(facts: Fact[], range: number): number {
+  return series(facts, range).reduce((sum, d) => sum + d.n, 0);
+}
+
+function bestDay(facts: Fact[], range: number) {
+  return series(facts, range).reduce((best, d) => (d.n > best.n ? d : best), { id: "", day: "", n: 0 });
+}
+
+function dayLabel(day: string): string {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function axisTicks(facts: Fact[], range: number): number[] {
+  let max = niceMax(Math.max(...series(facts, range).map((d) => d.n)));
+
+  return [max, max / 2, 0];
+}
+
+function xLabels(facts: Fact[], range: number): { id: string; label: string }[] {
+  let s = series(facts, range);
+  let picks = [0, Math.floor((s.length - 1) / 2), s.length - 1];
+
+  return picks.map((i) => ({ id: s[i].day, label: i === s.length - 1 ? "Today" : dayLabel(s[i].day) }));
+}
+
+function barHeight(n: number, facts: Fact[], range: number): string {
+  let max = axisTicks(facts, range)[0];
+
+  return `${(n / max) * 100}%`;
+}
+
+function labelFor(kind: Dimension, key: string): string {
+  if (key === "Other") {
+    return "Other";
+  }
+
+  switch (kind) {
+    case "referrer":
+      return referrerName(key);
+
+    case "country":
+      return `${flag(key)}  ${countryName(key)}`;
+
+    default:
+      return deviceName(key);
+  }
+}
+
+function percent(share: number): string {
+  return `${Math.round(share * 100)}%`;
+}
+
+function hostOnly(origin: string): string {
+  return origin.replace(/^https?:\/\//, "");
+}
+
+<html lang="en" class="page-link" (
+  links: LiveView<Link>,
+  linkId: string,
+  clicks: Listener<ClickEvent>,
+  facts: Fact[],
+  recent: ClickEvent[],
+  origin: string,
+  qr: string,
+  private clock: Clock = { now: Date.now() },
+) oninit={() => onAttach(clicks, facts, recent, clock)}>
+  <head>
+    <title>{links.get(linkId)?.title ?? "Link"} · shortwick</title>
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <AppShell wide={true}>
+      <LinkAnalytics e:if={links.get(linkId)}
+                     link={links.get(linkId)!}
+                     {links}
+                     {facts}
+                     {recent}
+                     {origin}
+                     {qr}
+                     {clock} />
+      <div e:else class="stack is-md">
+        <h1>This link is gone</h1>
+        <p><a href="/">Back to all links</a></p>
+      </div>
+    </AppShell>
+  </body>
+</html>
+
+<LinkAnalytics (
+  link: Link,
+  links: LiveView<Link>,
+  facts: Fact[],
+  recent: ClickEvent[],
+  origin: string,
+  qr: string,
+  clock: Clock,
+  private range: { value: Range } = { value: 30 as Range },
+  private edit: EditForm = closedEdit(),
+  private copy: CopyState = { copied: false },
+)>
+  <div class="stack is-xl">
+    <div class="stack is-md">
+      <a class="back link-muted" href="/">← All links</a>
+
+      <div class="link-head row">
+        <div class="link-head-main">
+          <div class="link-head-title cluster">
+            <h1>{link.title}</h1>
+            <span e:if={linkStatus(link) === "live"} class="pill is-success"><span class="pill-dot"></span>Live</span>
+            <span e:elseif={linkStatus(link) === "off"} class="pill">Off</span>
+            <span e:else class="pill is-warning">Expired {shortDate(link.expiresAt)}</span>
+          </div>
+          <div class="short-line row">
+            <a href={`/${link.slug}`} target="_blank" rel="noopener">{hostOnly(origin)}/{link.slug}</a>
+            <button type="button" class="is-ghost is-sm" onclick={() => copyText(`${origin}/${link.slug}`, copy)}>
+              {copy.copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <div class="dest-line truncate">→ <a href={link.url} target="_blank" rel="noopener">{displayUrl(link.url)}</a></div>
+        </div>
+
+        <div class="head-actions row">
+          <button type="button" onclick={() => onToggle(links, link)}>{link.enabled ? "Turn off" : "Turn on"}</button>
+          <button type="button" onclick={() => edit = startEdit(link)}>Edit</button>
+          <a class="button is-primary" href={`/links/${link.id}/qr.png`} download>Download QR</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="card tile">
+        <div class="card-body">
+          <span class="tile-label">Clicks, last {range.value} days</span>
+          <span class="tile-value">{formatCount(rangeTotal(facts, range.value))}</span>
+          <span class="tile-note">since {dayLabel(series(facts, range.value)[0].day)}</span>
+        </div>
+      </div>
+      <div class="card tile">
+        <div class="card-body">
+          <span class="tile-label">Daily average</span>
+          <span class="tile-value">{(rangeTotal(facts, range.value) / range.value).toFixed(1)}</span>
+          <span class="tile-note">over {range.value} days</span>
+        </div>
+      </div>
+      <div class="card tile">
+        <div class="card-body">
+          <span class="tile-label">Best day</span>
+          <span class="tile-value">{formatCount(bestDay(facts, range.value).n)}</span>
+          <span class="tile-note">{bestDay(facts, range.value).n ? dayLabel(bestDay(facts, range.value).day) : "No clicks yet"}</span>
+        </div>
+      </div>
+      <div class="card tile">
+        <div class="card-body">
+          <span class="tile-label">All-time clicks</span>
+          <span class="tile-value">{formatCount(link.clicks)}</span>
+          <span class="tile-note">last click {timeAgo(link.lastClickedAt, clock.now)}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head chart-head row">
+        <h2>Clicks over time</h2>
+        <div class="tab-list">
+          <button e:for={r of RANGES.map((n) => ({ id: String(n), n }))}
+                  type="button"
+                  class={["tab", range.value === r.n && "is-active"]}
+                  onclick={() => range.value = r.n}>
+            {r.n}d
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="chart">
+          <div class="chart-y" aria-hidden="true">
+            <span e:for={tick of axisTicks(facts, range.value).map((t, i) => ({ id: String(i), t }))}>{formatCount(tick.t)}</span>
+          </div>
+          <div class="chart-plot" role="img" aria-label={`Clicks per day over the last ${range.value} days`}>
+            <div e:for={d of series(facts, range.value)} class={["chart-col", d.n === 0 && "is-zero"]}>
+              <div class="chart-bar" style={{ height: barHeight(d.n, facts, range.value) }}></div>
+              <div class="chart-tip"><strong>{formatCount(d.n)}</strong> {d.n === 1 ? "click" : "clicks"} · {dayLabel(d.day)}</div>
+            </div>
+          </div>
+          <div class="chart-x" aria-hidden="true">
+            <span e:for={x of xLabels(facts, range.value)}>{x.label}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="breakdowns">
+      <Breakdown title="Top referrers" kind="referrer" rows={top(facts, "referrer", range.value)} />
+      <Breakdown title="Countries" kind="country" rows={top(facts, "country", range.value)} />
+      <Breakdown title="Devices" kind="device" rows={top(facts, "device", range.value)} />
+    </div>
+
+    <div class="lower">
+      <div class="card">
+        <div class="card-head row chart-head">
+          <h2>Recent clicks</h2>
+          <span class="pill is-success"><span class="pill-dot"></span>Live</span>
+        </div>
+        <ul e:if={recent.length > 0} class="recent-list">
+          <li e:for={c of recent} class={["recent-row", !shownAtLoad.has(c.id) && "is-new"]}>
+            <span class="recent-when">{timeAgo(c.createdAt, clock.now)}</span>
+            <span class="recent-ref">{referrerName(c.referrer)}</span>
+            <span>{flag(c.country)} {c.country === "unknown" ? "Unknown" : c.country}</span>
+            <span class="recent-device">{deviceName(c.device)}</span>
+          </li>
+        </ul>
+        <div e:else class="empty-note">No clicks yet. Share {hostOnly(origin)}/{link.slug} and they will appear here as they happen.</div>
+      </div>
+
+      <div class="side">
+        <div class="card">
+          <div class="card-head"><h2>QR code</h2></div>
+          <div class="card-body qr-body">
+            <div class="qr-frame">{raw(qr)}</div>
+            <a class="button is-block" href={`/links/${link.id}/qr.png`} download>Download PNG</a>
+          </div>
+        </div>
+
+        <div e:if={!edit.open} class="card">
+          <div class="card-head row chart-head">
+            <h2>Settings</h2>
+            <button type="button" class="is-sm" onclick={() => edit = startEdit(link)}>Edit</button>
+          </div>
+          <div class="card-body">
+            <dl class="settings-list">
+              <div><dt>Destination</dt><dd>{displayUrl(link.url)}</dd></div>
+              <div><dt>Tags</dt><dd>{link.tags.length ? link.tags.map((t) => `#${t}`).join(" ") : "None"}</dd></div>
+              <div><dt>Expires</dt><dd>{link.expiresAt ? shortDate(link.expiresAt) : "Never"}</dd></div>
+              <div><dt>Created</dt><dd>{shortDate(link.createdAt)}</dd></div>
+            </dl>
+          </div>
+        </div>
+
+        <div e:else class="card">
+          <div class="card-head"><h2>Edit link</h2></div>
+          <form onsubmit={() => onSave(links, link, edit)}>
+            <div class="card-body stack">
+              <p e:if={edit.error} class="error" role="alert">{edit.error}</p>
+              <div class="field">
+                <label for="edit-title">Title</label>
+                <input id="edit-title" value={edit.title}>
+              </div>
+              <div class="field">
+                <label for="edit-url">Destination</label>
+                <input id="edit-url" autocapitalize="none" spellcheck={false} value={edit.url}>
+              </div>
+              <div class="field">
+                <label for="edit-tags">Tags</label>
+                <input id="edit-tags" placeholder="launch, blog" value={edit.tags}>
+              </div>
+              <div class="field">
+                <label for="edit-expires">Expires</label>
+                <input id="edit-expires" type="date" value={edit.expires}>
+                <p class="hint">Leave empty to keep it working.</p>
+              </div>
+            </div>
+            <div class="card-foot">
+              <button type="button" class="is-ghost is-danger" onclick={() => onDelete(links, link)}>Delete</button>
+              <button type="button" class="is-ghost" onclick={() => edit.open = false}>Cancel</button>
+              <button type="submit" class="is-primary">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</LinkAnalytics>
+
+<Breakdown (title: string, kind: Dimension, rows: Share[])>
+  <div class="card">
+    <div class="card-head"><h2>{title}</h2></div>
+    <div class="card-body">
+      <ul e:if={rows.length > 0} class="share-list">
+        <li e:for={row of rows} class="share-row">
+          <div class="share-top">
+            <span>{labelFor(kind, row.key)}</span>
+            <span class="share-count">{formatCount(row.n)} · {percent(row.share)}</span>
+          </div>
+          <div class="share-track">
+            <div class="share-fill" style={{ width: `${(row.n / rows[0].n) * 100}%` }}></div>
+          </div>
+        </li>
+      </ul>
+      <p e:else class="empty-note">No clicks in this range.</p>
+    </div>
+  </div>
+</Breakdown>
