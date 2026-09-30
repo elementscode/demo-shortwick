@@ -1,0 +1,22 @@
+@import "#app/shared/styles/page.css";
+
+.page-gone .gone {
+  min-height: 100dvh;
+  padding: var(--space-8) var(--space-5);
+}
+
+.gone-panel {
+  max-width: var(--container-sm);
+  text-align: center;
+  align-items: center;
+}
+
+.gone-panel h1 {
+  margin: 0;
+  font-size: var(--text-2xl);
+}
+
+.gone-panel p {
+  margin: 0;
+  color: var(--ink-soft);
+}

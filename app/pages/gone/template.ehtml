@@ -1,0 +1,38 @@
+import "./style.css";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+import { BrandMark } from "#app/shared/templates/app-shell";
+
+type Reason = "missing" | "off" | "expired";
+
+const COPY: Record<Reason, { title: string; body: string }> = {
+  missing: {
+    title: "No link lives here",
+    body: "This short link does not exist. Check the address for a typo.",
+  },
+  off: {
+    title: "This link is switched off",
+    body: "Its owner has paused it. Ask them for a current link.",
+  },
+  expired: {
+    title: "This link has expired",
+    body: "It was set to stop working after a date that has passed.",
+  },
+};
+
+<html lang="en" class="page-gone" (reason: Reason)>
+  <head>
+    <title>{COPY[reason].title} · shortwick</title>
+    <meta name="robots" content="noindex">
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <main class="gone center">
+      <div class="gone-panel stack is-md">
+        <BrandMark size={40} />
+        <h1>{COPY[reason].title}</h1>
+        <p>{COPY[reason].body}</p>
+        <a class="link-muted" href="/">Shorten your own links with shortwick</a>
+      </div>
+    </main>
+  </body>
+</html>

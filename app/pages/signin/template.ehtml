@@ -1,0 +1,102 @@
+import "./style.css";
+import { redirect } from "@elements/app";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+import { signin, DEMO_LOGINS } from "#app/shared/services/auth";
+import { BrandMark } from "#app/shared/templates/app-shell";
+
+interface SigninForm {
+  email: string;
+  password: string;
+  error: string;
+  busy: boolean;
+}
+
+function onSubmit(form: SigninForm) {
+  form.busy = true;
+
+  try {
+    signin(form.email, form.password);
+    form.error = "";
+    redirect("/");
+  } catch (err: any) {
+    form.error = err.message;
+    form.busy = false;
+  }
+}
+
+function useDemo(form: SigninForm, login: { email: string; password: string }) {
+  form.email = login.email;
+  form.password = login.password;
+  onSubmit(form);
+}
+
+<html lang="en" class="page-signin" (
+  private form: SigninForm = { email: "", password: "", error: "", busy: false },
+)>
+  <head>
+    <title>Sign in · shortwick</title>
+    <meta name="description" content="Sign in to shortwick, the link shortener with click analytics.">
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <main class="auth center">
+      <div class="auth-column stack is-lg">
+        <div class="auth-head stack is-sm">
+          <BrandMark size={40} />
+          <h1>Sign in to shortwick</h1>
+          <p>Short links, and who clicked them.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-body">
+            <form class="stack" onsubmit={() => onSubmit(form)}>
+              <p e:if={form.error} class="error" role="alert">{form.error}</p>
+
+              <div class="field">
+                <label for="email">Email</label>
+                <input id="email"
+                       name="email"
+                       type="email"
+                       value={form.email}
+                       autocomplete="email"
+                       autocapitalize="none"
+                       spellcheck={false}
+                       placeholder="you@example.com"
+                       required>
+              </div>
+
+              <div class="field">
+                <label for="password">Password</label>
+                <input id="password"
+                       name="password"
+                       type="password"
+                       value={form.password}
+                       autocomplete="current-password"
+                       required>
+              </div>
+
+              <button type="submit" class={["is-primary is-block", form.busy && "is-loading"]}>Sign in</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="card demo-logins">
+          <div class="card-head">
+            <h2>Demo accounts</h2>
+          </div>
+          <div class="card-body">
+            <div e:for={login of DEMO_LOGINS.map((l) => ({ ...l, id: l.email }))} class="demo-login row">
+              <div class="demo-login-who">
+                <strong>{login.name}</strong>
+                <span class="demo-login-cred"><code>{login.email}</code> <code>{login.password}</code></span>
+              </div>
+              <button type="button" class="is-sm" onclick={() => useDemo(form, login)}>Use</button>
+            </div>
+          </div>
+        </div>
+
+        <p class="auth-alt">New here? <a href="/signup">Create an account</a></p>
+      </div>
+    </main>
+  </body>
+</html>

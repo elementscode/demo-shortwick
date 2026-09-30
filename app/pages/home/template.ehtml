@@ -1,0 +1,362 @@
+import "./style.css";
+import { LiveView, ValidationError } from "@elements/app";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+import { AppShell } from "#app/shared/templates/app-shell";
+import { Link, LinkStatus, linkStatus, normalizeUrl, parseTags, randomSlug, slugError } from "#app/shared/services/links";
+import { compactCount, displayUrl, endOfDay, formatCount, shortDate, timeAgo, titleFor } from "#app/shared/services/format";
+
+interface ShortenForm {
+  url: string;
+  slug: string;
+  tags: string;
+  expires: string;
+  errors: { url?: string; slug?: string; expires?: string };
+  created: string;
+}
+
+interface Filters {
+  q: string;
+  tag: string;
+  status: "all" | LinkStatus;
+}
+
+interface CopyState {
+  copied: boolean;
+}
+
+function emptyForm(): ShortenForm {
+  return { url: "", slug: "", tags: "", expires: "", errors: {}, created: "" };
+}
+
+function hostOnly(origin: string): string {
+  return origin.replace(/^https?:\/\//, "");
+}
+
+function onShorten(links: LiveView<Link>, form: ShortenForm) {
+  let errors: ShortenForm["errors"] = {};
+  let url = normalizeUrl(form.url);
+  let slug = form.slug.trim() || randomSlug();
+  let expiresAt = endOfDay(form.expires);
+
+  if (!url) {
+    errors.url = "Enter a web address, like example.com/page";
+  }
+
+  let slugProblem = slugError(slug);
+  if (slugProblem) {
+    errors.slug = slugProblem[0].toUpperCase() + slugProblem.slice(1);
+  } else if (links.find((l) => l.slug.toLowerCase() === slug.toLowerCase())) {
+    errors.slug = `You already use ${slug}`;
+  }
+
+  if (expiresAt && +expiresAt <= Date.now()) {
+    errors.expires = "Pick a date in the future";
+  }
+
+  form.errors = errors;
+  if (errors.url || errors.slug || errors.expires) {
+    return;
+  }
+
+  try {
+    links.insert(
+      {
+        slug,
+        url: url!,
+        title: titleFor(url!),
+        tags: parseTags(form.tags),
+        enabled: true,
+        expiresAt,
+        clicks: 0,
+        lastClickedAt: null,
+        createdAt: new Date(),
+      },
+      () => {
+        form.url = "";
+        form.slug = "";
+        form.tags = "";
+        form.expires = "";
+        form.created = slug;
+      },
+    );
+  } catch (err: any) {
+    form.created = "";
+
+    if (err instanceof ValidationError && err.errors) {
+      let fields = err.errors as Record<string, string[]>;
+      form.errors = { url: fields.url?.[0], slug: fields.slug?.[0] };
+    } else {
+      form.errors = { url: err.message };
+    }
+  }
+}
+
+function onToggle(links: LiveView<Link>, link: Link) {
+  links.update({ ...link, enabled: !link.enabled });
+}
+
+async function copyText(text: string, state: CopyState) {
+  await navigator.clipboard.writeText(text);
+  state.copied = true;
+  setTimeout(() => state.copied = false, 1600);
+}
+
+function matches(link: Link, filters: Filters): boolean {
+  if (filters.tag && !link.tags.includes(filters.tag)) {
+    return false;
+  }
+
+  if (filters.status !== "all" && linkStatus(link) !== filters.status) {
+    return false;
+  }
+
+  let q = filters.q.trim().toLowerCase();
+  if (!q) {
+    return true;
+  }
+
+  return [link.title, link.slug, link.url, ...link.tags].some((field) => field.toLowerCase().includes(q));
+}
+
+function visible(links: LiveView<Link>, filters: Filters): Link[] {
+  return links
+    .filter((l) => matches(l, filters))
+    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+}
+
+function tagCounts(links: LiveView<Link>) {
+  let counts = new Map<string, number>();
+
+  for (let link of links) {
+    for (let tag of link.tags) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+
+  return [...counts]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([tag, count]) => ({ id: tag, tag, count }));
+}
+
+function statusTabs(links: LiveView<Link>) {
+  let count = (status: LinkStatus) => links.filter((l) => linkStatus(l) === status).length;
+
+  return [
+    { id: "all" as const, label: "All", count: links.length },
+    { id: "live" as const, label: "Live", count: count("live") },
+    { id: "off" as const, label: "Off", count: count("off") },
+    { id: "expired" as const, label: "Expired", count: count("expired") },
+  ];
+}
+
+function totalClicks(links: LiveView<Link>): number {
+  return links.reduce((sum, l) => sum + l.clicks, 0);
+}
+
+function topLink(links: LiveView<Link>): Link | undefined {
+  return links.sort((a, b) => b.clicks - a.clicks)[0];
+}
+
+// The count a row first rendered with, so only a click that lands while the
+// page is open plays the bump.
+const firstSeen = new Map<string, number>();
+
+function bumped(link: Link): boolean {
+  if (!firstSeen.has(link.id)) {
+    firstSeen.set(link.id, link.clicks);
+    return false;
+  }
+
+  return firstSeen.get(link.id) !== link.clicks;
+}
+
+<html lang="en" class="page-home" (
+  links: LiveView<Link>,
+  origin: string,
+  private form: ShortenForm = emptyForm(),
+  private filters: Filters = { q: "", tag: "", status: "all" as "all" | LinkStatus },
+  private createdCopy: CopyState = { copied: false },
+)>
+  <head>
+    <title>Links · shortwick</title>
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <AppShell wide={true}>
+      <div class="stack is-xl">
+        <div class="dash-head row">
+          <div>
+            <h1>Links</h1>
+            <p>Shorten, share, and watch the clicks come in.</p>
+          </div>
+          <span class="pill is-success live-pill"><span class="pill-dot"></span>Live</span>
+        </div>
+
+        <div class="stats">
+          <div class="card stat">
+            <div class="card-body">
+              <span class="stat-label">Total clicks</span>
+              <span class="stat-value">{formatCount(totalClicks(links))}</span>
+              <span class="stat-note">across {links.length} links</span>
+            </div>
+          </div>
+          <div class="card stat">
+            <div class="card-body">
+              <span class="stat-label">Live links</span>
+              <span class="stat-value">{statusTabs(links)[1].count}</span>
+              <span class="stat-note">{statusTabs(links)[2].count} off, {statusTabs(links)[3].count} expired</span>
+            </div>
+          </div>
+          <div class="card stat">
+            <div class="card-body">
+              <span class="stat-label">Most clicked</span>
+              <span class="stat-value is-text truncate">{topLink(links)?.title ?? "Nothing yet"}</span>
+              <span class="stat-note">{topLink(links) ? `${formatCount(topLink(links)!.clicks)} clicks` : "Share a link to start"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body">
+            <form class="stack" onsubmit={() => onShorten(links, form)}>
+              <div class="shorten-main">
+                <div class="field">
+                  <label for="url">Long URL</label>
+                  <input id="url"
+                         name="url"
+                         type="text"
+                         inputmode="url"
+                         autocapitalize="none"
+                         spellcheck={false}
+                         placeholder="https://example.com/a/very/long/page"
+                         class={[form.errors.url && "is-error"]}
+                         value={form.url}>
+                </div>
+                <button type="submit" class="is-primary">Shorten</button>
+              </div>
+              <p e:if={form.errors.url} class="error" role="alert">{form.errors.url}</p>
+
+              <div class="shorten-extra">
+                <div class="field">
+                  <label for="slug">Custom back-half <span class="text-ink-dim">(optional)</span></label>
+                  <div class="slug-input">
+                    <span class="slug-prefix">{hostOnly(origin)}/</span>
+                    <input id="slug"
+                           name="slug"
+                           autocapitalize="none"
+                           spellcheck={false}
+                           placeholder="random"
+                           class={[form.errors.slug && "is-error"]}
+                           value={form.slug}>
+                  </div>
+                  <p e:if={form.errors.slug} class="error">{form.errors.slug}</p>
+                </div>
+
+                <div class="field">
+                  <label for="tags">Tags <span class="text-ink-dim">(comma separated)</span></label>
+                  <input id="tags" name="tags" placeholder="launch, blog" value={form.tags}>
+                </div>
+
+                <div class="field">
+                  <label for="expires">Expires <span class="text-ink-dim">(optional)</span></label>
+                  <input id="expires"
+                         name="expires"
+                         type="date"
+                         class={[form.errors.expires && "is-error"]}
+                         value={form.expires}>
+                  <p e:if={form.errors.expires} class="error">{form.errors.expires}</p>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <div e:if={form.created} class="card-foot">
+            <div class="created row w-full">
+              <span>Created <a class="created-link" href={`/${form.created}`} target="_blank" rel="noopener">{hostOnly(origin)}/{form.created}</a></span>
+              <button type="button" class="is-sm" onclick={() => copyText(`${origin}/${form.created}`, createdCopy)}>
+                {createdCopy.copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="stack is-md">
+          <div class="toolbar cluster">
+            <div class="tabs">
+              <div class="tab-list">
+                <button e:for={tab of statusTabs(links)}
+                        type="button"
+                        class={["tab", filters.status === tab.id && "is-active"]}
+                        onclick={() => filters.status = tab.id}>
+                  {tab.label} <span class="text-ink-dim tabular">{tab.count}</span>
+                </button>
+              </div>
+            </div>
+
+            <input type="search" placeholder="Search links" aria-label="Search links" value={filters.q}>
+          </div>
+
+          <div e:if={tagCounts(links).length > 0} class="tag-filter cluster">
+            <button type="button"
+                    class={["pill tag-chip", !filters.tag && "is-accent"]}
+                    onclick={() => filters.tag = ""}>All tags</button>
+            <button e:for={t of tagCounts(links)}
+                    type="button"
+                    class={["pill tag-chip", filters.tag === t.tag && "is-accent"]}
+                    onclick={() => filters.tag = filters.tag === t.tag ? "" : t.tag}>
+              #{t.tag} <span class="text-ink-dim">{t.count}</span>
+            </button>
+          </div>
+
+          <div class="card">
+            <ul e:if={visible(links, filters).length > 0} class="link-list">
+              <LinkRow e:for={link of visible(links, filters)} {link} {links} {origin} />
+            </ul>
+            <div e:elseif={links.length === 0} class="empty">No links yet. Paste a long URL above to make your first.</div>
+            <div e:else class="empty">No links match. <button type="button" class="is-ghost is-sm" onclick={() => { filters.q = ""; filters.tag = ""; filters.status = "all"; }}>Clear filters</button></div>
+          </div>
+        </div>
+      </div>
+    </AppShell>
+  </body>
+</html>
+
+<LinkRow (
+  link: Link,
+  links: LiveView<Link>,
+  origin: string,
+  private copy: CopyState = { copied: false },
+)>
+  <li class={["link-row", linkStatus(link) !== "live" && "is-dim"]}>
+    <div class="link-main">
+      <div class="link-title row">
+        <a class="truncate" href={`/links/${link.id}`}>{link.title}</a>
+        <span e:if={linkStatus(link) === "off"} class="pill">Off</span>
+        <span e:if={linkStatus(link) === "expired"} class="pill is-warning">Expired</span>
+      </div>
+      <div class="link-short row">
+        <a href={`/${link.slug}`} target="_blank" rel="noopener">{hostOnly(origin)}/{link.slug}</a>
+        <button type="button" class="is-ghost is-sm" onclick={() => copyText(`${origin}/${link.slug}`, copy)}>
+          {copy.copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <div class="link-dest truncate">{displayUrl(link.url)}</div>
+      <div class="link-meta cluster">
+        <span e:for={tag of link.tags.map((t) => ({ id: t, t }))} class="pill">#{tag.t}</span>
+        <span>Created {shortDate(link.createdAt)}</span>
+        <span e:if={link.expiresAt && linkStatus(link) !== "expired"} class="meta-more">Expires {shortDate(link.expiresAt)}</span>
+        <span class="meta-more">Last click {timeAgo(link.lastClickedAt)}</span>
+      </div>
+    </div>
+
+    <div class={["link-count", bumped(link) && "is-bumped"]}>
+      <strong e:for={n of [{ id: String(link.clicks), value: link.clicks }]}>{compactCount(n.value)}</strong>
+      <span>clicks</span>
+    </div>
+
+    <div class="link-actions row">
+      <button type="button" class="is-sm" onclick={() => onToggle(links, link)}>{link.enabled ? "Turn off" : "Turn on"}</button>
+      <a class="button is-sm is-primary" href={`/links/${link.id}`}>Analytics</a>
+    </div>
+  </li>
+</LinkRow>
