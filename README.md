@@ -1,10 +1,12 @@
+![Shortwick, a URL shortener built with Elements: a short link's analytics page with its live status, all-time clicks and a 90-day clicks chart with a launch-day spike.](https://elements.dev/demos/01a0f42d-7038-7412-a214-9445b53b37d5/poster?v=f8193d4ca9b4)
+
 # Shortwick
 
 > A demo app built with [Elements](https://elements.dev).
 
 Short links with custom back-halves and expiry dates, instant redirects, live click counts, referrer, country and device breakdowns, tags, search and QR codes.
 
-**Demo:** [Shortwick](TBD)
+**Demo:** [Shortwick](https://elements.dev/demos/01a0f42d-7038-7412-a214-9445b53b37d5)
 
 ## Agent specs
 
