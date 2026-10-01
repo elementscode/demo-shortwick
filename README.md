@@ -38,7 +38,7 @@ Shortwick needed short links that redirect at once, a click count that climbs wh
 
 ### What the agent got from the tooling
 
-The agent ran 20 builds in 18 minutes. By the build's own timer, the median build finished in 60 milliseconds, so it checked its work after each edit and kept going. The build caught three calls in `app/routes/follow.ts` that passed an argument to a function that takes none, each with the file and line. The agent read 48 manual pages as it reached each part, from `livetable/mutations` and `recipes/live-from-sql` to `packages`, then wrote 32 tests and checked its pages at phone width in a real browser.
+The agent ran 20 builds in 18 minutes, checking its work after each edit and moving straight on. The build caught three calls in `app/routes/follow.ts` that passed an argument to a function that takes none, each with the file and line. The agent read 48 manual pages as it reached each part, from `livetable/mutations` and `recipes/live-from-sql` to `packages`, then wrote 32 tests and checked its pages at phone width in a real browser.
 
 Start in `app/shared/services/links.ts`.
 
