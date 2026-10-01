@@ -30,10 +30,15 @@ Shortwick needed short links that redirect at once, a click count that climbs wh
 ### What Elements gave the app
 
 - **Live click counts.** Links are a LiveTable, one view per owner, and a trigger publishes each new count, so the dashboard's numbers climb as visitors click.
+
 - **Links edited straight through the view.** The dashboard creates, edits, switches off and deletes links through the live view itself. The table checks the owner, validates the url and back-half, and reports a taken back-half on the form.
+
 - **Redirects first, counting after.** A short link sends the visitor on their way, then stores the click and bumps the count in one transaction. Expired and switched-off links get their own page.
+
 - **Analytics that update as clicks arrive.** Each click also goes out on a channel, and a link's analytics page adds it to the chart and the referrer, country and device lists over 7, 30 or 90 days.
+
 - **QR codes.** Each link has a QR code served as a PNG, built with an npm package.
+
 - **Data and sessions from SQL.** Migrations define the shortener and seed two users, twenty links and three months of clicks, and each owner signs in with a session.
 
 ### What the project server gave the agent
