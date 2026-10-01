@@ -23,6 +23,25 @@ app.
 elements create shortwick -scaffold=elementscode/demo-shortwick
 ```
 
+## How it's built
+
+Shortwick needed short links that redirect at once, a click count that climbs while the owner watches, breakdowns by referrer, country and device, QR codes and accounts. Each of those is a part of Elements, so the agent spent its 18 minutes on the shortener itself.
+
+### What Elements gave the app
+
+- **Live click counts.** `links` is a LiveTable in `app/shared/services/links.ts`, one view per owner. A trigger in the schema migration publishes each new count, so the dashboard's numbers climb as visitors click.
+- **Links edited straight through the view.** The dashboard and link pages call `links.insert`, `links.update` and `links.delete` on the view itself. The table's own handlers check the owner, validate the url and back-half, report a taken slug as a field error, and leave the click count to the redirect.
+- **Redirects first, counting after.** `app/routes/follow.ts` sends the visitor on their way, then `recordClick` in `app/shared/services/clicks.ts` stores the click and bumps the count in one transaction. Expired and switched-off links get their own page.
+- **Analytics that update as clicks arrive.** `recordClick` also sends each click on the `clickEvents` channel, and a link's analytics page listens for its own clicks and adds each one to the chart and the referrer, country and device lists over 7, 30 or 90 days.
+- **QR codes from a package.** `app/shared/services/qr.ts` builds the code with an npm package, and `/links/:id/qr.png` serves it as a PNG.
+- **Data from SQL files.** Two migrations define the shortener and seed two users, twenty links and three months of clicks.
+
+### What the agent got from the tooling
+
+The agent ran 20 builds in 18 minutes. By the build's own timer, the median build finished in 60 milliseconds, so it checked its work after each edit and kept going. The build caught three calls in `app/routes/follow.ts` that passed an argument to a function that takes none, each with the file and line. The agent read 48 manual pages as it reached each part, from `livetable/mutations` and `recipes/live-from-sql` to `packages`, then wrote 32 tests and checked its pages at phone width in a real browser.
+
+Start in `app/shared/services/links.ts`.
+
 ## Seed data and demo accounts
 
 The seed creates twenty links across two accounts with three months of click
