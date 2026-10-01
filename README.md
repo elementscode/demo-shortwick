@@ -36,9 +36,13 @@ Shortwick needed short links that redirect at once, a click count that climbs wh
 - **QR codes from a package.** `app/shared/services/qr.ts` builds the code with an npm package, and `/links/:id/qr.png` serves it as a PNG.
 - **Data from SQL files.** Two migrations define the shortener and seed two users, twenty links and three months of clicks.
 
-### What the agent got from the tooling
+### What the project server gave the agent
 
-The agent ran 20 builds in 18 minutes, checking its work after each edit and moving straight on. The build caught three calls in `app/routes/follow.ts` that passed an argument to a function that takes none, each with the file and line. The agent read 48 manual pages as it reached each part, from `livetable/mutations` and `recipes/live-from-sql` to `packages`, then wrote 32 tests and checked its pages at phone width in a real browser.
+The project server runs alongside the agent and answers as soon as a file is saved: it type-checks the templates, TypeScript and SQL, applies migrations and reruns the tests, so every question came back right away and the agent kept building.
+
+### What shipped
+
+The app type-checks with zero errors and all 32 tests pass. Every page was checked on desktop and phone before publishing. The repo was installed fresh from GitHub and run before the demo went live.
 
 Start in `app/shared/services/links.ts`.
 
