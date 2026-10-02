@@ -10,9 +10,6 @@ Short links with custom back-halves and expiry dates, instant redirects, live cl
 
 ## Agent specs
 
-What one run of the prompt below took, from an empty Elements project to this
-app.
-
 - **Agent:** Claude Code, Opus 5.5 Medium
 - **Time:** 18 min
 - **Cost:** $5.13 at API rates, September 2026
@@ -65,23 +62,7 @@ sign-in page lists them.
 Country comes from a CDN country header (`cf-ipcountry` and similar) when one
 is present, and otherwise from the region in the visitor's language setting.
 
-## The prompt
-
-```text
-Build a URL shortener named shortwick with click analytics.
-
-- Accounts. Shorten a url, with an optional custom back-half and expiry date.
-- Short links redirect instantly.
-- Each link's analytics: clicks over time, top referrers, countries, and
-  devices.
-- Tag links, search them, and turn a link off.
-- A QR code for each link, downloadable as PNG.
-
-Seed two users with twenty links and three months of click history. Show the
-seeded logins on the sign-in page.
-
-Click counts update in real time.
-```
+**Demo:** [Shortwick](https://elements.dev/demos/01a0f42d-7038-7412-a214-9445b53b37d5)
 
 ## License
 
