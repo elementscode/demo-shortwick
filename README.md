@@ -1,30 +1,16 @@
-![Shortwick, a URL shortener built with Elements: a short link's analytics page with its live status, all-time clicks and a 90-day clicks chart with a launch-day spike.](https://elements.dev/demos/01a0f42d-7038-7412-a214-9445b53b37d5/poster?v=f8193d4ca9b4)
+![A URL shortener with click analytics, built by Claude Code on Elements: a short link's analytics page with its live status, all-time clicks and a 90-day clicks chart with a launch-day spike.](https://elements.dev/demos/01a0f42d-7038-7412-a214-9445b53b37d5/poster?v=f8193d4ca9b4)
 
-# Shortwick
+# A URL shortener with click analytics, built by Claude Code on Elements
 
-> A demo app built with [Elements](https://elements.dev).
+> Shortwick is a full-stack app built with Claude Code on Elements.
 
 Short links with custom back-halves and expiry dates, instant redirects, live click counts, referrer, country and device breakdowns, tags, search and QR codes.
 
-**Demo:** [Shortwick](https://elements.dev/demos/01a0f42d-7038-7412-a214-9445b53b37d5)
-
-## Agent specs
-
-- **Agent:** Claude Code, Opus 5.5 Medium
-- **Time:** 18 min
-- **Cost:** $5.13 at API rates, September 2026
-
-## Get started
-
-```bash
-elements create shortwick -scaffold=elementscode/demo-shortwick
-```
+[Run this app on your machine](https://elements.dev/demos/01a0f42d-7038-7412-a214-9445b53b37d5). Use this demo as inspiration, or as the starting point for your own app. Your agent creates a new app with this one as the scaffold, and you prompt it to add whatever features you want.
 
 ## How it's built
 
 Shortwick needed short links that redirect at once, a click count that climbs while the owner watches, breakdowns by referrer, country and device, QR codes and accounts. Each of those is a part of Elements, so the agent spent its 18 minutes on the shortener itself.
-
-### What Elements gave the app
 
 - **Live click counts.** Links are a LiveTable, one view per owner, and a trigger publishes each new count, so the dashboard's numbers climb as visitors click.
 
@@ -38,32 +24,6 @@ Shortwick needed short links that redirect at once, a click count that climbs wh
 
 - **Data and sessions from SQL.** Migrations define the shortener and seed two users, twenty links and three months of clicks, and each owner signs in with a session.
 
-### What the project server gave the agent
+## Why Elements
 
-The project server runs alongside the agent and answers as soon as a file is saved: it type-checks the templates, TypeScript and SQL, applies migrations and reruns the tests, so every question came back right away and the agent kept building.
-
-### What shipped
-
-The app type-checks with zero errors and all 32 tests pass. Every page works on desktop and phone.
-
-## Seed data and demo accounts
-
-The seed creates twenty links across two accounts with three months of click
-history (about 2,200 clicks): weekly rhythms, a few launch-day spikes, one
-expired link and two switched off. Destinations and referrers use fictional
-`.example` domains. Both accounts' password is `shortwick-demo`, and the
-sign-in page lists them.
-
-| Email                  | Links |
-| ---------------------- | ----- |
-| ada@shortwick.test     | 12    |
-| grace@shortwick.test   | 8     |
-
-Country comes from a CDN country header (`cf-ipcountry` and similar) when one
-is present, and otherwise from the region in the visitor's language setting.
-
-**Demo:** [Shortwick](https://elements.dev/demos/01a0f42d-7038-7412-a214-9445b53b37d5)
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+Elements is an integrated full-stack app framework and a project server. The project server checks the agent's work as it builds: it type-checks the server and browser code, analyzes the program, applies migrations and runs the tests, then reports the results to the agent. A security mistake, such as calling a server-only function from the browser, is a compile error. The agent reads the report and fixes its own mistakes before it tells you a feature is done. The same checks run on every feature you ask for next.
